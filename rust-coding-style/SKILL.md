@@ -1,3 +1,18 @@
+---
+name: rust-coding-style
+description: Rust coding style and decision defaults for API design, errors, structure, naming, ownership, async boundaries, performance tools, and testing choices. Use when writing or reviewing Rust code and when choosing between design options.
+---
+
+# Rust Coding Style
+
+Apply these rules when writing or reviewing Rust code. Keep decisions consistent and terse.
+
+## Examples
+- "Pick an error strategy for this new Rust binary."
+- "Decide API shape and module layout for this Rust crate."
+
+## Guidelines
+
 ## Error handling
 - New app: prefer `thiserror`.
 - IO-only code: prefer `std::io::Result`.
