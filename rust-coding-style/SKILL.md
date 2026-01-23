@@ -13,6 +13,16 @@ Apply these rules when writing or reviewing Rust code. Keep decisions consistent
 
 ## Guidelines
 
+## Control flow and logging
+- Never use a fallback branch unless explicitly instructed.
+- Never ignore a `match` branch unless explicitly instructed. For unhandled events, use `tracing` with at least `warn!` and include a `{:?}` debug of the event.
+
+## Placeholders and stubs
+- When placing placeholders or stubs, use `todo!()`. Do not create empty files.
+
+## Language
+- Do not use the word "plumbing".
+
 ## Error handling
 - New app: prefer `thiserror`.
 - IO-only code: prefer `std::io::Result`.
