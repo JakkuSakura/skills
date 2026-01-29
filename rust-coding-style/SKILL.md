@@ -39,6 +39,7 @@ Apply these rules when writing or reviewing Rust code. Keep decisions consistent
 - Iterator exposure: prefer `fn iter(&self) -> impl Iterator<Item = &Item>`.
 - Optional config fields: use `#[serde(default)]` and concrete fields; avoid `Option<T>` in the struct.
 - Validation on construction: prefer builder with `build() -> Result<Self, Error>`.
+- Never implement From/TryFrom for wrapper newtypes. Unless they are Error types.
 
 ## Code structure
 - Small module: use `mod.rs`; large module: use `mod/` with `mod.rs`.
