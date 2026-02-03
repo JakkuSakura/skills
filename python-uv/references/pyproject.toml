@@ -1,0 +1,18 @@
+[project]
+name = "your-project"
+version = "0.1.0"
+description = "Short description"
+requires-python = ">=3.10"
+readme = "README.md"
+license = { text = "Proprietary" }
+authors = [{ name = "Your Name" }]
+dependencies = [
+  "pyyaml>=6.0",
+]
+
+[project.scripts]
+your-cli = "your_package.cli.main:main"
+
+[build-system]
+requires = ["uv-build"]
+build-backend = "uv_build"
