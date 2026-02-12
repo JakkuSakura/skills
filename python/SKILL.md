@@ -8,6 +8,7 @@ description: Use when writing or refactoring Python code under strict style cons
 Use this skill when the user wants strict, explicit Python code with low ambiguity and fail-fast behavior.
 
 ## Core Rules
+- Put all imports at the top of the file.
 - Never use `getattr` or `hasattr`.
 - Never use `isinstance` type checks.
 - Do not introduce implicit defaults for required data paths.
@@ -21,6 +22,7 @@ Use this skill when the user wants strict, explicit Python code with low ambigui
 5) Keep control flow straightforward; avoid defensive swallowing of errors.
 
 ## Review Checklist
+- Imports are module-level and grouped at file top.
 - No reflective access helpers (`getattr`, `hasattr`).
 - No runtime type filtering with `isinstance`.
 - No hidden default values for required fields.
