@@ -1,6 +1,8 @@
 ---
 name: rust-coding-style
 description: Rust coding style and decision defaults for API design, errors, structure, naming, ownership, async boundaries, performance tools, and testing choices. Use when writing or reviewing Rust code and when choosing between design options.
+metadata:
+  short-description: Rust coding style defaults
 ---
 
 # Rust Coding Style
