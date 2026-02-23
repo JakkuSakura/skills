@@ -95,6 +95,45 @@ When table/count mismatch appears (e.g., count shows rows but table is empty):
 4. Check runtime JS errors in browser console before patching backend.
 5. Prefer robust field fallback mapping in UI (`currency || symbol`, etc.).
 
+## Known repeated issue: counter updates but table looks empty
+
+Symptom:
+
+- Header/count shows rows (for example `Top Pairs: 200`), but `<tbody>` appears empty.
+
+Likely root cause in Solid template mode:
+
+- Using control-flow components directly inside table sections (`<tbody><Show>...<For>...</For></Show></tbody>`)
+  can produce invalid table child nodes in some runtime/parser paths.
+
+Reliable fix:
+
+1. Keep `<tbody>` children as actual `<tr>` nodes only.
+2. Replace table-local `<Show>/<For>` wrappers with a single function expression in `<tbody>`.
+3. Return either:
+   - one fallback `<tr>` for empty state, or
+   - `rows.map(...)` of `<tr>` templates for data rows.
+
+Reference rendering pattern:
+
+```html
+<tbody>
+  ${() => {
+    const rows = pairs();
+    if (rows.length === 0) {
+      return html`<tr><td colspan="6">No pair matched the current filters.</td></tr>`;
+    }
+    return rows.map((row) => html`<tr>...</tr>`);
+  }}
+</tbody>
+```
+
+Verification checklist:
+
+- API returns non-empty array (`/api/v1/pairs/select?...`).
+- Served HTML contains the `const rows = pairs();` table-body renderer.
+- Browser console has no runtime render errors.
+
 ## Deployment guidance
 
 When a package has `deployment.yaml`, deploy with:
