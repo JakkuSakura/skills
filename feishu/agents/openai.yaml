@@ -1,0 +1,4 @@
+interface:
+  display_name: "Feishu"
+  short_description: "Browse and operate Feishu Docs and Wiki"
+  default_prompt: "Use $feishu to browse, read, search, summarize, or modify Feishu Docs, Drive, or Wiki content."
