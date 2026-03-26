@@ -1,6 +1,6 @@
 ---
 name: feishu
-description: Use when the user mentions Feishu. Handles Feishu Docs/Drive/Wiki operations in Chrome via Playwright CLI, including login with QR, reusing saved auth state when possible, and executing read/write tasks such as search, open, summarize, comment, edit, import, export, and other document operations. Treat delete and other irreversible actions as high risk and confirm intent carefully.
+description: Use when the user mentions Feishu. Handles Feishu Docs/Drive/Wiki operations in Chrome via Playwright only, preferring headless execution with saved auth state. Supports browsing, reading, summarizing, editing, publishing local files as separate Feishu docs, deterministic template-center creation, and true wiki child-page creation via move-into-wiki flow. If login is stale, switch to QR login in a visible browser.
 ---
 
 # Feishu
@@ -9,190 +9,165 @@ Use this skill whenever the user mentions `Feishu`, a `feishu.cn` URL, Feishu Do
 
 This skill is Playwright-only.
 - Assume Chrome.
-- Prefer `npx -y @playwright/cli`.
-- Prefer a visible browser for login and any workflow that benefits from user observation.
+- Prefer headless by default so work does not interrupt the user's desktop.
+- Only use a visible browser when QR login is required or the user explicitly wants to watch.
 
 ## Session Defaults
 
-- Session name: `feishu-login`
 - Saved auth state: `.playwright-cli/feishu-login-state.json`
 - Default workspace root for artifacts: the current repo root
+- Default execution mode for routine automation: fresh headless browser context
 
-Reuse the existing session if it is open. Otherwise:
-1. Open Chrome with a persistent profile.
-2. If a saved state file exists, load it.
-3. Navigate to the requested Feishu URL or a neutral Feishu Docs entry point.
-4. If the session is stale and Feishu redirects to login, switch to QR login flow.
+For read-only exploration, reusing an existing browser session is acceptable if it is clearly valid.
+For write operations, prefer a fresh browser context with saved auth state instead of reusing old tabs.
+
+Default order:
+1. Launch a fresh headless Chrome context.
+2. Load `.playwright-cli/feishu-login-state.json`.
+3. Navigate to the requested Feishu URL or `https://w00rwzmdhev.feishu.cn/drive/home/`.
+4. If the session is stale and Feishu redirects to login, switch to the QR login flow in a visible browser.
 
 ## Login Workflow
 
-Open a visible Chrome window with a persistent profile:
+When login is required:
+1. Open a visible Chrome window with a persistent profile.
+2. Navigate to `https://w00rwzmdhev.feishu.cn/drive/home/`.
+3. Let the user scan the QR code manually.
+4. After login succeeds, save auth state back to `.playwright-cli/feishu-login-state.json`.
 
-```bash
-npx -y @playwright/cli -s=feishu-login open \
-  'https://w00rwzmdhev.feishu.cn/drive/home/' \
-  --browser=chrome \
-  --headed \
-  --persistent
-```
-
-If a saved state exists, load it before navigation:
-
-```bash
-npx -y @playwright/cli -s=feishu-login state-load .playwright-cli/feishu-login-state.json
-```
-
-Detect stale auth by checking whether the page lands on `accounts.feishu.cn` or shows login text such as:
-- `Log In With QR Code`
-- `Scan the QR code`
-- `Switch to Lark to log in`
-
-If login is required:
-1. Leave the visible browser open.
-2. Let the user scan the QR code manually.
-3. After the user confirms login, verify with:
-
-```bash
-npx -y @playwright/cli -s=feishu-login eval "location.href"
-npx -y @playwright/cli -s=feishu-login eval "document.title"
-```
-
-4. Save auth state:
-
-```bash
-npx -y @playwright/cli -s=feishu-login state-save .playwright-cli/feishu-login-state.json
-```
+Detect stale auth by checking for:
+- redirects to `accounts.feishu.cn`
+- login text such as `Log In With QR Code`
+- QR scan prompts
 
 ## Operating Pattern
 
 For any Feishu request:
 1. Ensure the authenticated session is usable.
 2. Navigate to the target URL or workspace area.
-3. Capture a snapshot before interacting:
-
-```bash
-npx -y @playwright/cli -s=feishu-login snapshot
-```
-
-4. Prefer stable interactions in this order:
+3. Prefer stable interactions in this order:
 - direct URL navigation
-- semantic `run-code` selectors
-- `click` with snapshot refs
-- text evaluation with `eval`
+- fresh headless context with saved auth
+- semantic selectors
+- deterministic keyboard shortcuts
+- DOM evaluation inside the page
+- normal clicks only as fallback
+4. After each meaningful step, verify with:
+- URL
+- title
+- visible text
 
-5. After each meaningful step, verify the new page state with:
-- `eval "location.href"`
-- `eval "document.title"`
-- `eval "document.body.innerText.slice(0,N)"`
+## Stable New Doc Creation
 
-6. Save artifacts only when they help with continuity:
-- snapshots for navigation-heavy flows
-- storage state after login refresh
+Use this as the default creation path for blank Feishu documents.
 
-## Common Tasks
+1. Open `https://w00rwzmdhev.feishu.cn/drive/home/` in a fresh headless context.
+2. Trigger `Meta+Alt+n`.
+3. Wait for a new page whose URL matches `.../docx/...`.
+4. On the new page:
+- `document.querySelectorAll('[contenteditable=true]')[1]` is the title editor
+- `document.querySelectorAll('[contenteditable=true]')[2]` is the body editor
+5. Set `innerText`, then dispatch `InputEvent('input', ...)`.
+6. Wait until the page shows `Saved to cloud`.
+7. Return the new URL.
 
-### Search / Browse
+This flow is the preferred default for deterministic blank-doc creation.
 
-- Open Drive home: `https://<tenant>.feishu.cn/drive/home/`
-- Open Wiki: `https://<tenant>.feishu.cn/wiki/`
-- Use page text extraction to enumerate visible docs or spaces.
-- Use snapshots to identify clickable refs.
+## Drive `New -> Docs`
 
-### View / Summarize
+The current Feishu Drive UI does not treat `New -> Docs` as a direct blank-doc action.
 
-- Open the doc or wiki page.
-- Extract title, URL, visible headings, and key body text.
-- Summarize from the rendered page, not from assumptions.
-- If content is lazy-loaded, scroll or use tab/section navigation first.
+Verified behavior:
+1. Open `https://w00rwzmdhev.feishu.cn/drive/home/`.
+2. Click the `New` card.
+3. Click the `Docs` menu item.
+4. Feishu opens a template center overlay in the current page.
+5. Choosing a visible `Use` button creates a new page, often under a `wiki/...` URL depending on the selected template.
 
-### Edit / Comment / Write
+Implications:
+- `Drive -> New -> Docs` is a template-center flow, not a blank-doc flow.
+- For deterministic blank-doc creation, keep using `Meta+Alt+n`.
+- For deterministic template-based creation from Drive, automate:
+  1. `New`
+  2. `Docs`
+  3. wait for the template center overlay
+  4. select the intended template
+  5. click its `Use` button
+  6. wait for the new page to open
 
-- Confirm the target page and editing context before changing anything.
-- Prefer opening the exact document first, then interacting with visible editor controls.
-- After edits, verify the new visible content or comment thread text.
-- For text-heavy edits, prefer deterministic `fill`, `type`, or `run-code` actions over brittle mouse automation.
+Do not assume the first `Use` button means a blank document. It usually maps to the first visible recommended template.
 
-### Import / Export
+## Publishing Local Markdown
 
-- Import: navigate to the relevant Upload or Import control, then use `upload`.
-- Export: use the page menus and download/export controls exposed in the UI.
-- Verify the action started or completed from visible UI feedback.
+For bulk publishing local Markdown files to Feishu as separate pages:
 
-### Delete / Move / Other Destructive Changes
+1. Read each local Markdown file.
+2. Use the first `# Heading` as the Feishu title.
+3. Use the rest of the file as plain text body content.
+4. Create one new `docx` page per file using `Meta+Alt+n`.
+5. Paste body text directly unless the user explicitly asks for formatting fidelity.
+6. Verify `Saved to cloud` and collect the resulting URLs.
+
+Known-good result pattern:
+- one local file -> one separate `docx` page
+- title matches the Markdown heading
+- body starts with the expected Markdown content
+
+## Verified Working Pattern
+
+This flow has been verified for publishing multiple local Markdown files as separate Feishu pages:
+- one local file -> one separate `docx` page
+- title derived from the first Markdown heading
+- body written as plain text content
+- save confirmed before returning the URL
+
+## True Wiki Child Page Creation
+
+Do not assume that creating a new `docx` page from a wiki page automatically creates a wiki child page.
+
+Verified current behavior:
+- `Meta+Alt+n` from both Drive and an open wiki page opens a standalone `docx` page
+- the wiki sidebar create menu can open:
+  - a template center via `Docs`
+  - a move dialog via `Move Docs Here`
+
+Reliable wiki child-page flow:
+1. Create a standalone `docx` page first with `Meta+Alt+n`.
+2. Write the title and body if needed.
+3. Open the target wiki page.
+4. In the sidebar tree area, click the visible create trigger on the relevant root or section.
+5. Choose `Move Docs Here`.
+6. In the move dialog, find the created doc row.
+7. Select the row and click `Move`.
+8. Verify the title appears in the wiki tree, for example in `.workspace-tree-view-node-content`.
+
+This flow has been verified end to end and should be the default way to create true wiki child pages under automation.
+
+Notes:
+- the move dialog supports searching and selecting existing docs
+- after a successful move, the page remains on the current wiki page while the tree updates
+- verification should check the sidebar tree, not only the main document body
+
+## Destructive Changes
 
 Treat these as high risk:
 - delete doc
 - delete wiki page or wiki space
 - move content between spaces
-- clear comments or permissions
-- bulk actions
+- bulk destructive edits
 
-Rules:
-- Require explicit user intent for the exact target.
-- Restate the target object before acting.
-- Prefer opening the target page first and verifying title/URL/owner.
-- If the UI presents a final destructive confirmation dialog, stop and make sure the intended target still matches.
-- After the action, verify the result immediately.
-
-## Playwright CLI Patterns
-
-Open visible Chrome:
-
-```bash
-npx -y @playwright/cli -s=feishu-login open --browser=chrome --headed --persistent
-```
-
-Navigate:
-
-```bash
-npx -y @playwright/cli -s=feishu-login goto 'https://w00rwzmdhev.feishu.cn/drive/home/'
-```
-
-Read page state:
-
-```bash
-npx -y @playwright/cli -s=feishu-login eval "location.href"
-npx -y @playwright/cli -s=feishu-login eval "document.title"
-npx -y @playwright/cli -s=feishu-login eval "document.body.innerText.slice(0,2500)"
-```
-
-Take snapshot:
-
-```bash
-npx -y @playwright/cli -s=feishu-login snapshot
-```
-
-Use robust selectors:
-
-```bash
-npx -y @playwright/cli -s=feishu-login run-code "async page => {
-  await page.locator('[data-e2e=main-menu-wiki]').first().click({ force: true });
-}"
-```
-
-List/select tabs:
-
-```bash
-npx -y @playwright/cli -s=feishu-login tab-list
-npx -y @playwright/cli -s=feishu-login tab-select 1
-```
-
-## Feishu UI Notes
-
-- Feishu Drive uses virtualized lists. Text nodes often are not the correct click target.
-- If normal `click` fails, use `run-code` with row-level or `data-*` selectors and `force: true` when justified.
-- Feishu often opens wiki spaces or docs in new tabs. Always check `tab-list` after navigation.
-- Console warnings are common and usually low-signal. Focus on URL, title, and rendered content.
+Before acting:
+1. Restate the exact target.
+2. Verify title and URL.
+3. Confirm the target still matches at the final confirmation step.
 
 ## Response Style
 
 Execute the user's requested Feishu operation instead of stopping at analysis.
-- Browse when they ask to explore.
-- Open and summarize when they ask to read.
-- Search when they ask to find.
-- Edit/comment/import/export when they ask to change content.
 
 Be concise in status updates, but include:
 - the current page or target object
 - whether auth is valid or QR login is needed
 - any destructive-action confirmation gate
+- whether the task is using the stable headless `Meta+Alt+n` creation flow
+- whether the task is using the template-center flow or the move-into-wiki flow
